@@ -6,6 +6,9 @@ export interface GetAttendanceParams {
   session?: string
   monkId?: string
   monkType?: string
+  status?: string
+  startDate?: string
+  endDate?: string
   page?: number
   pageSize?: number
 }

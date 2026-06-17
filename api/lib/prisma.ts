@@ -751,15 +751,30 @@ export const residentService = {
 }
 
 export const attendanceService = {
-  async findAll(params?: PaginationParams & { date?: string; session?: string }): Promise<PaginatedResponse<Attendance>> {
+  async findAll(params?: PaginationParams & { date?: string; session?: string; startDate?: string; endDate?: string; monkId?: string; status?: string }): Promise<PaginatedResponse<Attendance>> {
     if (useMock || !(await testConnection())) {
       let data = [...mockAttendances]
       if (params?.date) {
         const targetDate = new Date(params.date).toDateString()
         data = data.filter((a) => new Date(a.date).toDateString() === targetDate)
       }
+      if (params?.startDate) {
+        const start = new Date(params.startDate)
+        data = data.filter((a) => new Date(a.date) >= start)
+      }
+      if (params?.endDate) {
+        const end = new Date(params.endDate)
+        end.setHours(23, 59, 59, 999)
+        data = data.filter((a) => new Date(a.date) <= end)
+      }
       if (params?.session) {
         data = data.filter((a) => a.session === params.session)
+      }
+      if (params?.monkId) {
+        data = data.filter((a) => a.monkId === params.monkId)
+      }
+      if (params?.status) {
+        data = data.filter((a) => a.status === params.status)
       }
       const total = data.length
       const page = params?.page || 1
@@ -770,7 +785,18 @@ export const attendanceService = {
     }
     const where: any = {}
     if (params?.date) where.date = new Date(params.date)
+    if (params?.startDate || params?.endDate) {
+      where.date = {}
+      if (params?.startDate) where.date.gte = new Date(params.startDate)
+      if (params?.endDate) {
+        const end = new Date(params.endDate)
+        end.setHours(23, 59, 59, 999)
+        where.date.lte = end
+      }
+    }
     if (params?.session) where.session = params.session
+    if (params?.monkId) where.monkId = params.monkId
+    if (params?.status) where.status = params.status
     const [total, data] = await Promise.all([
       prisma!.attendance.count({ where }),
       prisma!.attendance.findMany({

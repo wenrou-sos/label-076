@@ -7,11 +7,15 @@ const router = Router()
 
 router.get('/', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const params: PaginationParams & { date?: string; session?: string } = {
+    const params: PaginationParams & { date?: string; session?: string; startDate?: string; endDate?: string; monkId?: string; status?: string } = {
       page: parseInt(req.query.page as string) || 1,
       pageSize: parseInt(req.query.pageSize as string) || 10,
       date: req.query.date as string,
       session: req.query.session as string,
+      startDate: req.query.startDate as string,
+      endDate: req.query.endDate as string,
+      monkId: req.query.monkId as string,
+      status: req.query.status as string,
     }
     const result = await attendanceService.findAll(params)
     res.json({

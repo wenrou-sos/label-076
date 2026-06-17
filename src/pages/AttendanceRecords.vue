@@ -112,8 +112,8 @@ const loadData = async () => {
       getRegistrations(),
       getResidents()
     ])
-    guests.value = regData.data
-    residents.value = resData.data
+    guests.value = (regData as any).data || regData
+    residents.value = (resData as any).data || resData
     
     const params: any = {}
     if (dateRange.value) {
@@ -128,7 +128,7 @@ const loadData = async () => {
     }
     
     const attData = await getAttendance(params)
-    records.value = attData.data
+    records.value = (attData as any).data || attData
   } catch (error) {
     message.error('加载数据失败')
   } finally {
