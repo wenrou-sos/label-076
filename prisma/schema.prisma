@@ -1,0 +1,105 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique @db.VarChar(50)
+  dharmaName   String    @map("dharma_name") @db.VarChar(100)
+  role         String    @db.VarChar(20)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  createdRegistrations GuestRegistration[] @relation("CreatedBy")
+  recordedAttendances  Attendance[]        @relation("RecordedBy")
+
+  @@map("users")
+}
+
+model Dormitory {
+  id                String              @id @default(uuid())
+  roomNumber        String              @map("room_number") @db.VarChar(20)
+  bedNumber         String              @map("bed_number") @db.VarChar(20)
+  floor             Int
+  capacity          Int                 @default(1)
+  currentOccupantId String?             @unique @map("current_occupant_id")
+  status            String              @default("available") @db.VarChar(20)
+  notes             String?             @db.Text
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  currentOccupant GuestRegistration? @relation("BedAssignment", fields: [currentOccupantId], references: [id], map: "dormitory_current_occupant_fkey")
+
+  @@unique([roomNumber, bedNumber])
+  @@map("dormitories")
+}
+
+model GuestRegistration {
+  id                     String              @id @default(uuid())
+  dharmaName             String              @map("dharma_name") @db.VarChar(100)
+  originalTemple         String              @map("original_temple") @db.VarChar(200)
+  preceptsCertificateNo  String?             @unique @map("precepts_certificate_no") @db.VarChar(100)
+  arrivalDate            DateTime            @map("arrival_date") @db.Date
+  expectedStayDays       Int                 @map("expected_stay_days")
+  actualLeaveDate        DateTime?           @map("actual_leave_date") @db.Date
+  roomNumber             String?             @map("room_number") @db.VarChar(20)
+  bedNumber              String?             @map("bed_number") @db.VarChar(20)
+  status                 String              @default("active") @db.VarChar(20)
+  createdBy              String?             @map("created_by")
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
+
+  creator   User?      @relation("CreatedBy", fields: [createdBy], references: [id])
+  dormitory Dormitory? @relation("BedAssignment")
+  resident  Resident?
+
+  @@map("guest_registrations")
+}
+
+model Resident {
+  id                       String              @id @default(uuid())
+  guestRegistrationId      String?             @unique @map("guest_registration_id")
+  dharmaName               String              @map("dharma_name") @db.VarChar(100)
+  generationName           String              @map("generation_name") @db.VarChar(50)
+  tonsureMaster            String              @map("tonsure_master") @db.VarChar(100)
+  preceptsDate             DateTime            @map("precepts_date") @db.Date
+  preceptsTemple           String              @map("precepts_temple") @db.VarChar(200)
+  position                 String?             @db.VarChar(50)
+  probationStartDate       DateTime            @map("probation_start_date") @db.Date
+  probationEndDate         DateTime?           @map("probation_end_date") @db.Date
+  ordinationCeremonyDate   DateTime?           @map("ordination_ceremony_date") @db.Date
+  status                   String              @default("probation") @db.VarChar(20)
+  createdAt                DateTime            @default(now()) @map("created_at")
+  updatedAt                DateTime            @updatedAt @map("updated_at")
+
+  guestRegistration GuestRegistration? @relation(fields: [guestRegistrationId], references: [id])
+
+  @@map("residents")
+}
+
+model Attendance {
+  id         String    @id @default(uuid())
+  monkId     String    @map("monk_id")
+  monkType   String    @map("monk_type") @db.VarChar(20)
+  date       DateTime  @db.Date
+  session    String    @db.VarChar(10)
+  status     String    @db.VarChar(20)
+  notes      String?   @db.Text
+  recordedBy String?   @map("recorded_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  recorder User? @relation("RecordedBy", fields: [recordedBy], references: [id], map: "attendance_recorder_fkey")
+
+  @@unique([monkId, date, session])
+  @@map("attendance")
+}
