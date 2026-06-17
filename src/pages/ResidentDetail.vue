@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   NCard,
@@ -23,23 +23,34 @@ import {
   Clock,
   BookOpen,
   Edit3,
-  ArrowLeft
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  XCircle
 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { getResident } from '@/api/resident'
+import { getMonkAttendanceCalendar } from '@/api/attendance'
 import type {
   Resident,
-  ResidentStatus
+  ResidentStatus,
+  MonkAttendanceCalendar
 } from '../../shared/types'
-import { ResidentStatusLabels, PositionOptions } from '../../shared/types'
+import { ResidentStatusLabels, PositionOptions, AttendanceStatusLabels, AttendanceSessionLabels } from '../../shared/types'
 import dayjs from 'dayjs'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const loading = ref(false)
+const calendarLoading = ref(false)
 const resident = ref<Resident | null>(null)
 const activeTab = ref('basic')
+
+const calendarYear = ref(new Date().getFullYear())
+const calendarMonth = ref(new Date().getMonth())
+const attendanceCalendar = ref<MonkAttendanceCalendar | null>(null)
 
 const id = computed(() => route.params.id as string)
 
@@ -68,6 +79,82 @@ const loadData = async () => {
     loading.value = false
   }
 }
+
+const loadAttendanceCalendar = async () => {
+  if (!id.value) return
+  calendarLoading.value = true
+  try {
+    attendanceCalendar.value = await getMonkAttendanceCalendar(
+      id.value,
+      'resident',
+      calendarYear.value,
+      calendarMonth.value
+    )
+  } catch (error) {
+    message.error('加载考勤记录失败')
+  } finally {
+    calendarLoading.value = false
+  }
+}
+
+const prevMonth = () => {
+  if (calendarMonth.value === 0) {
+    calendarMonth.value = 11
+    calendarYear.value--
+  } else {
+    calendarMonth.value--
+  }
+}
+
+const nextMonth = () => {
+  if (calendarMonth.value === 11) {
+    calendarMonth.value = 0
+    calendarYear.value++
+  } else {
+    calendarMonth.value++
+  }
+}
+
+watch([calendarYear, calendarMonth], () => {
+  if (activeTab.value === 'attendance') {
+    loadAttendanceCalendar()
+  }
+})
+
+watch(activeTab, (newVal) => {
+  if (newVal === 'attendance' && !attendanceCalendar.value) {
+    loadAttendanceCalendar()
+  }
+})
+
+const calendarDays = computed(() => {
+  const firstDay = new Date(calendarYear.value, calendarMonth.value, 1)
+  const lastDay = new Date(calendarYear.value, calendarMonth.value + 1, 0)
+  const startWeekday = firstDay.getDay()
+  const daysInMonth = lastDay.getDate()
+  
+  const days: Array<{ day: number | null; date?: string; morning?: string; evening?: string }> = []
+  
+  for (let i = 0; i < startWeekday; i++) {
+    days.push({ day: null })
+  }
+  
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${calendarYear.value}-${String(calendarMonth.value + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const morningRecord = attendanceCalendar.value?.records.find(r => r.date === dateStr && r.session === 'morning')
+    const eveningRecord = attendanceCalendar.value?.records.find(r => r.date === dateStr && r.session === 'evening')
+    days.push({
+      day: d,
+      date: dateStr,
+      morning: morningRecord?.status,
+      evening: eveningRecord?.status
+    })
+  }
+  
+  return days
+})
+
+const weekdayLabels = ['日', '一', '二', '三', '四', '五', '六']
 
 const goBack = () => {
   router.push('/residents')
@@ -232,24 +319,138 @@ onMounted(loadData)
 
             <NTabPane name="attendance" tab="考勤记录">
               <div class="pt-4">
-                <NCard :bordered="false" class="bg-amber-50/50 mb-4">
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                      <Calendar class="w-5 h-5 text-amber-600" />
-                      <span class="font-semibold text-amber-900">近期考勤</span>
-                    </div>
-                    <NButton size="small" type="primary" quaternary>
-                      <template #icon>
-                        <Edit3 class="w-4 h-4" />
-                      </template>
-                      查看全部
-                    </NButton>
-                  </div>
-                </NCard>
-                <div class="text-center py-12 text-gray-400">
-                  <Calendar class="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p>考勤记录功能开发中...</p>
+                <div v-if="calendarLoading" class="text-center py-16 text-gray-400">
+                  加载考勤记录中...
                 </div>
+                <template v-else>
+                  <NCard :bordered="false" class="bg-amber-50/50 mb-4">
+                    <NGrid :cols="4" :x-gap="16">
+                      <NGridItem>
+                        <div class="text-center">
+                          <div class="text-2xl font-bold text-green-600">{{ attendanceCalendar?.totalPresent || 0 }}</div>
+                          <div class="text-xs text-gray-500 mt-1">出勤</div>
+                        </div>
+                      </NGridItem>
+                      <NGridItem>
+                        <div class="text-center">
+                          <div class="text-2xl font-bold text-red-600">{{ attendanceCalendar?.totalAbsent || 0 }}</div>
+                          <div class="text-xs text-gray-500 mt-1">缺勤</div>
+                        </div>
+                      </NGridItem>
+                      <NGridItem>
+                        <div class="text-center">
+                          <div class="text-2xl font-bold text-amber-600">{{ attendanceCalendar?.totalLeave || 0 }}</div>
+                          <div class="text-xs text-gray-500 mt-1">请假</div>
+                        </div>
+                      </NGridItem>
+                      <NGridItem>
+                        <div class="text-center">
+                          <div class="text-2xl font-bold text-amber-700">{{ attendanceCalendar?.attendanceRate || 0 }}%</div>
+                          <div class="text-xs text-gray-500 mt-1">出勤率</div>
+                        </div>
+                      </NGridItem>
+                    </NGrid>
+                  </NCard>
+
+                  <NCard :bordered="false">
+                    <div class="flex items-center justify-between mb-4">
+                      <NSpace>
+                        <Calendar class="w-5 h-5 text-amber-600" />
+                        <span class="font-semibold text-amber-900">
+                          {{ resident?.dharmaName }} 考勤日历
+                        </span>
+                      </NSpace>
+                      <NSpace>
+                        <NButton size="small" text @click="prevMonth">
+                          <ChevronLeft class="w-4 h-4" />
+                        </NButton>
+                        <span class="font-medium text-gray-700 min-w-[100px] text-center">
+                          {{ calendarYear }}年{{ calendarMonth + 1 }}月
+                        </span>
+                        <NButton size="small" text @click="nextMonth">
+                          <ChevronRight class="w-4 h-4" />
+                        </NButton>
+                      </NSpace>
+                    </div>
+
+                    <div class="grid grid-cols-7 gap-1 mb-2">
+                      <div
+                        v-for="weekday in weekdayLabels"
+                        :key="weekday"
+                        class="text-center text-xs font-medium text-gray-500 py-2"
+                      >
+                        {{ weekday }}
+                      </div>
+                    </div>
+
+                    <div class="grid grid-cols-7 gap-1">
+                      <div
+                        v-for="(cell, idx) in calendarDays"
+                        :key="idx"
+                        class="min-h-[90px] p-2 rounded-lg border transition-colors"
+                        :class="cell.day ? (
+                          (cell.morning === 'absent' || cell.evening === 'absent')
+                            ? 'bg-red-50 border-red-200'
+                            : (cell.morning || cell.evening)
+                              ? 'bg-green-50 border-green-200'
+                              : 'bg-gray-50 border-gray-100 hover:bg-amber-50'
+                        ) : 'bg-transparent border-transparent'"
+                      >
+                        <template v-if="cell.day">
+                          <div class="text-xs font-medium text-gray-600 mb-2">{{ cell.day }}</div>
+                          <div class="space-y-1">
+                            <div
+                              v-if="cell.morning"
+                              class="flex items-center gap-1 text-xs rounded px-1.5 py-0.5"
+                              :class="{
+                                'bg-green-100 text-green-700': cell.morning === 'present',
+                                'bg-red-100 text-red-700': cell.morning === 'absent',
+                                'bg-amber-100 text-amber-700': cell.morning === 'leave'
+                              }"
+                            >
+                              <CheckCircle2 v-if="cell.morning === 'present'" class="w-3 h-3" />
+                              <XCircle v-else-if="cell.morning === 'absent'" class="w-3 h-3" />
+                              <Clock v-else class="w-3 h-3" />
+                              早{{ AttendanceStatusLabels[cell.morning as keyof typeof AttendanceStatusLabels] }}
+                            </div>
+                            <div
+                              v-if="cell.evening"
+                              class="flex items-center gap-1 text-xs rounded px-1.5 py-0.5"
+                              :class="{
+                                'bg-green-100 text-green-700': cell.evening === 'present',
+                                'bg-red-100 text-red-700': cell.evening === 'absent',
+                                'bg-amber-100 text-amber-700': cell.evening === 'leave'
+                              }"
+                            >
+                              <CheckCircle2 v-if="cell.evening === 'present'" class="w-3 h-3" />
+                              <XCircle v-else-if="cell.evening === 'absent'" class="w-3 h-3" />
+                              <Clock v-else class="w-3 h-3" />
+                              晚{{ AttendanceStatusLabels[cell.evening as keyof typeof AttendanceStatusLabels] }}
+                            </div>
+                            <div v-if="!cell.morning && !cell.evening" class="text-xs text-gray-400">
+                              无记录
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-gray-100 flex items-center gap-6 text-sm text-gray-500">
+                      <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded bg-green-100 border border-green-300"></span>
+                        有出勤记录
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded bg-red-100 border border-red-300"></span>
+                        有缺勤记录
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded bg-gray-100 border border-gray-200"></span>
+                        无考勤记录
+                      </div>
+                    </div>
+                  </NCard>
+                </template>
               </div>
             </NTabPane>
           </NTabs>

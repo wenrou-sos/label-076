@@ -85,4 +85,58 @@ router.get('/absent-alerts', authenticate, async (req: Request, res: Response): 
   }
 })
 
+router.get('/statistics', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const weeks = parseInt(req.query.weeks as string) || 8
+    const months = parseInt(req.query.months as string) || 6
+    const stats = await attendanceService.getStatistics(weeks, months)
+    res.json({
+      success: true,
+      data: stats,
+    })
+  } catch (error) {
+    console.error('Get attendance statistics error:', error)
+    res.status(500).json({
+      success: false,
+      error: '获取考勤统计失败',
+    })
+  }
+})
+
+router.get('/monk/:monkId/calendar', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { monkId } = req.params
+    const monkType = req.query.monkType as 'guest' | 'resident'
+    const year = req.query.year ? parseInt(req.query.year as string) : undefined
+    const month = req.query.month ? parseInt(req.query.month as string) : undefined
+
+    if (!monkType || !['guest', 'resident'].includes(monkType)) {
+      res.status(400).json({
+        success: false,
+        error: '请提供正确的僧人类型(guest/resident)',
+      })
+      return
+    }
+
+    const calendar = await attendanceService.getMonkCalendar(monkId, monkType, year, month)
+    if (!calendar) {
+      res.status(404).json({
+        success: false,
+        error: '未找到该僧人考勤记录',
+      })
+      return
+    }
+    res.json({
+      success: true,
+      data: calendar,
+    })
+  } catch (error) {
+    console.error('Get monk attendance calendar error:', error)
+    res.status(500).json({
+      success: false,
+      error: '获取僧人考勤日历失败',
+    })
+  }
+})
+
 export default router

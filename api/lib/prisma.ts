@@ -11,6 +11,13 @@ import type {
   PaginationParams,
   AttendanceBatchRequest,
   AbsentAlert,
+  AttendanceStatistics,
+  AttendanceWeeklyTrend,
+  AttendanceMonthlyTrend,
+  AttendanceSession,
+  AttendanceSessionComparison,
+  MonkType,
+  MonkAttendanceCalendar,
 } from '../../shared/types.js'
 
 let prisma: PrismaClient | null = null
@@ -928,6 +935,199 @@ export const attendanceService = {
       })
     }
     return alerts
+  },
+
+  async getStatistics(weeks: number = 8, months: number = 6): Promise<AttendanceStatistics> {
+    const allRecords = useMock || !(await testConnection()) ? mockAttendances : await prisma!.attendance.findMany()
+
+    const totalPresent = allRecords.filter(a => a.status === 'present').length
+    const totalAbsent = allRecords.filter(a => a.status === 'absent').length
+    const totalLeave = allRecords.filter(a => a.status === 'leave').length
+    const overallAttendanceRate = allRecords.length > 0
+      ? Math.round((totalPresent / allRecords.length) * 100)
+      : 0
+
+    const getWeekKey = (date: Date): string => {
+      const d = new Date(date)
+      const day = d.getDay()
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+      const monday = new Date(d.setDate(diff))
+      return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
+    }
+
+    const getMonthKey = (date: Date): string => {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    }
+
+    const weeklyMap = new Map<string, { absent: number; total: number }>()
+    for (let i = weeks - 1; i >= 0; i--) {
+      const date = new Date()
+      date.setDate(date.getDate() - i * 7)
+      const key = getWeekKey(date)
+      weeklyMap.set(key, { absent: 0, total: 0 })
+    }
+    allRecords.forEach(a => {
+      const key = getWeekKey(new Date(a.date))
+      if (weeklyMap.has(key)) {
+        const item = weeklyMap.get(key)!
+        item.total += 1
+        if (a.status === 'absent') item.absent += 1
+      }
+    })
+    const weeklyTrend: AttendanceWeeklyTrend[] = Array.from(weeklyMap.entries()).map(([week, data]) => ({
+      week,
+      absentCount: data.absent,
+      totalCount: data.total,
+      absentRate: data.total > 0 ? Math.round((data.absent / data.total) * 100) : 0
+    }))
+
+    const monthlyMap = new Map<string, { absent: number; total: number }>()
+    for (let i = months - 1; i >= 0; i--) {
+      const date = new Date()
+      date.setMonth(date.getMonth() - i)
+      const key = getMonthKey(date)
+      monthlyMap.set(key, { absent: 0, total: 0 })
+    }
+    allRecords.forEach(a => {
+      const key = getMonthKey(new Date(a.date))
+      if (monthlyMap.has(key)) {
+        const item = monthlyMap.get(key)!
+        item.total += 1
+        if (a.status === 'absent') item.absent += 1
+      }
+    })
+    const monthlyTrend: AttendanceMonthlyTrend[] = Array.from(monthlyMap.entries()).map(([month, data]) => ({
+      month,
+      absentCount: data.absent,
+      totalCount: data.total,
+      absentRate: data.total > 0 ? Math.round((data.absent / data.total) * 100) : 0
+    }))
+
+    const sessionMap = new Map<AttendanceSession, { absent: number; total: number }>([
+      ['morning', { absent: 0, total: 0 }],
+      ['evening', { absent: 0, total: 0 }]
+    ])
+    allRecords.forEach(a => {
+      const item = sessionMap.get(a.session)
+      if (item) {
+        item.total += 1
+        if (a.status === 'absent') item.absent += 1
+      }
+    })
+    const sessionComparison: AttendanceSessionComparison[] = Array.from(sessionMap.entries()).map(([session, data]) => ({
+      session,
+      absentCount: data.absent,
+      totalCount: data.total,
+      absentRate: data.total > 0 ? Math.round((data.absent / data.total) * 100) : 0
+    }))
+
+    return {
+      weeklyTrend,
+      monthlyTrend,
+      sessionComparison,
+      totalPresent,
+      totalAbsent,
+      totalLeave,
+      overallAttendanceRate
+    }
+  },
+
+  async getMonkCalendar(
+    monkId: string,
+    monkType: MonkType,
+    year?: number,
+    month?: number
+  ): Promise<MonkAttendanceCalendar | null> {
+    const targetYear = year || new Date().getFullYear()
+    const targetMonth = month || new Date().getMonth()
+
+    let dharmaName = ''
+    if (useMock || !(await testConnection())) {
+      if (monkType === 'guest') {
+        const guest = mockRegistrations.find(g => g.id === monkId)
+        dharmaName = guest?.dharmaName || ''
+      } else {
+        const resident = mockResidents.find(r => r.id === monkId)
+        dharmaName = resident?.dharmaName || ''
+      }
+      if (!dharmaName) return null
+
+      const records = mockAttendances.filter(a => {
+        const d = new Date(a.date)
+        return a.monkId === monkId &&
+          a.monkType === monkType &&
+          d.getFullYear() === targetYear &&
+          d.getMonth() === targetMonth
+      }).map(a => ({
+        date: new Date(a.date).toISOString().split('T')[0],
+        session: a.session,
+        status: a.status
+      }))
+
+      const totalPresent = records.filter(r => r.status === 'present').length
+      const totalAbsent = records.filter(r => r.status === 'absent').length
+      const totalLeave = records.filter(r => r.status === 'leave').length
+      const attendanceRate = records.length > 0
+        ? Math.round((totalPresent / records.length) * 100)
+        : 0
+
+      return {
+        year: targetYear,
+        month: targetMonth,
+        dharmaName,
+        totalPresent,
+        totalAbsent,
+        totalLeave,
+        attendanceRate,
+        records
+      }
+    }
+
+    if (monkType === 'guest') {
+      const guest = await prisma!.guestRegistration.findUnique({ where: { id: monkId } }) as GuestRegistration | null
+      if (!guest) return null
+      dharmaName = guest.dharmaName
+    } else {
+      const resident = await prisma!.resident.findUnique({ where: { id: monkId } }) as Resident | null
+      if (!resident) return null
+      dharmaName = resident.dharmaName
+    }
+
+    const startDate = new Date(targetYear, targetMonth, 1)
+    const endDate = new Date(targetYear, targetMonth + 1, 0)
+
+    const records = await prisma!.attendance.findMany({
+      where: {
+        monkId,
+        monkType,
+        date: { gte: startDate, lte: endDate }
+      },
+      orderBy: { date: 'asc' }
+    }) as Attendance[]
+
+    const formattedRecords = records.map(a => ({
+      date: new Date(a.date).toISOString().split('T')[0],
+      session: a.session,
+      status: a.status
+    }))
+
+    const totalPresent = formattedRecords.filter(r => r.status === 'present').length
+    const totalAbsent = formattedRecords.filter(r => r.status === 'absent').length
+    const totalLeave = formattedRecords.filter(r => r.status === 'leave').length
+    const attendanceRate = formattedRecords.length > 0
+      ? Math.round((totalPresent / formattedRecords.length) * 100)
+      : 0
+
+    return {
+      year: targetYear,
+      month: targetMonth,
+      dharmaName,
+      totalPresent,
+      totalAbsent,
+      totalLeave,
+      attendanceRate,
+      records: formattedRecords
+    }
   },
 }
 

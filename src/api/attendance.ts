@@ -1,5 +1,5 @@
 import { request } from './http'
-import type { Attendance, AbsentAlert, PaginatedResponse, AttendanceBatchRequest } from '../../shared/types'
+import type { Attendance, AbsentAlert, PaginatedResponse, AttendanceBatchRequest, AttendanceStatistics, MonkAttendanceCalendar, MonkType } from '../../shared/types'
 
 export interface GetAttendanceParams {
   date?: string
@@ -38,5 +38,26 @@ export const getAbsentAlerts = () => {
   return request<AbsentAlert[]>({
     url: '/attendance/absent-alerts',
     method: 'GET'
+  })
+}
+
+export const getAttendanceStatistics = (weeks?: number, months?: number) => {
+  return request<AttendanceStatistics>({
+    url: '/attendance/statistics',
+    method: 'GET',
+    params: { weeks, months }
+  })
+}
+
+export const getMonkAttendanceCalendar = (
+  monkId: string,
+  monkType: MonkType,
+  year?: number,
+  month?: number
+) => {
+  return request<MonkAttendanceCalendar>({
+    url: `/attendance/monk/${monkId}/calendar`,
+    method: 'GET',
+    params: { monkType, year, month }
   })
 }

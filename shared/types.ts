@@ -141,6 +141,54 @@ export interface AbsentAlert {
   lastAbsentDate: Date;
 }
 
+export interface AttendanceWeeklyTrend {
+  week: string;
+  absentCount: number;
+  totalCount: number;
+  absentRate: number;
+}
+
+export interface AttendanceMonthlyTrend {
+  month: string;
+  absentCount: number;
+  totalCount: number;
+  absentRate: number;
+}
+
+export interface AttendanceSessionComparison {
+  session: AttendanceSession;
+  absentCount: number;
+  totalCount: number;
+  absentRate: number;
+}
+
+export interface AttendanceStatistics {
+  weeklyTrend: AttendanceWeeklyTrend[];
+  monthlyTrend: AttendanceMonthlyTrend[];
+  sessionComparison: AttendanceSessionComparison[];
+  totalPresent: number;
+  totalAbsent: number;
+  totalLeave: number;
+  overallAttendanceRate: number;
+}
+
+export interface MonkAttendanceRecord {
+  date: string;
+  session: AttendanceSession;
+  status: AttendanceStatus;
+}
+
+export interface MonkAttendanceCalendar {
+  year: number;
+  month: number;
+  dharmaName: string;
+  totalPresent: number;
+  totalAbsent: number;
+  totalLeave: number;
+  attendanceRate: number;
+  records: MonkAttendanceRecord[];
+}
+
 export const RoleLabels: Record<UserRole, string> = {
   admin: '系统管理员',
   receptionist: '客堂知客',
