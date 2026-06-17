@@ -104,7 +104,7 @@ const loadData = async () => {
       getDormitories()
     ])
     registrations.value = regData.data
-    dormitories.value = dormData
+    dormitories.value = (dormData as any).data || dormData
   } catch (error) {
     message.error('加载数据失败')
   } finally {
@@ -192,8 +192,8 @@ const handleAssignBed = async () => {
     message.success('分配成功')
     showBedModal.value = false
     loadData()
-  } catch (error) {
-    message.error('操作失败')
+  } catch (error: any) {
+    message.error(error?.message || '分配床位失败，请检查寮房是否可用')
   }
 }
 

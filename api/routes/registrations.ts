@@ -130,15 +130,15 @@ router.delete('/:id', authenticate, requireRole('admin'), async (req: Request, r
 router.put('/:id/assign-bed', authenticate, requireRole('admin', 'receptionist'), async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params
-    const { dormitoryId } = req.body
-    if (!dormitoryId) {
+    const { roomNumber, bedNumber, dormitoryId } = req.body
+    if (!dormitoryId && (!roomNumber || !bedNumber)) {
       res.status(400).json({
         success: false,
-        error: '寮房ID不能为空',
+        error: '请提供寮房ID或房间号和床位号',
       })
       return
     }
-    const registration = await registrationService.assignBed(id, dormitoryId)
+    const registration = await registrationService.assignBed(id, { roomNumber, bedNumber, dormitoryId })
     if (!registration) {
       res.status(400).json({
         success: false,

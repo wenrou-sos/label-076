@@ -74,7 +74,8 @@ const statusOptions = [
 const loadData = async () => {
   loading.value = true
   try {
-    dormitories.value = await getDormitories()
+    const data = await getDormitories()
+    dormitories.value = (data as any).data || data
   } catch (error) {
     message.error('加载数据失败')
   } finally {

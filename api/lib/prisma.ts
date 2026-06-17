@@ -517,11 +517,22 @@ export const registrationService = {
 
   async assignBed(
     id: string,
-    dormitoryId: string
+    params: { dormitoryId?: string; roomNumber?: string; bedNumber?: string }
   ): Promise<GuestRegistration | null> {
+    const { dormitoryId, roomNumber, bedNumber } = params
+
     if (useMock || !(await testConnection())) {
       const regIndex = mockRegistrations.findIndex((g) => g.id === id)
-      const dormIndex = mockDormitories.findIndex((d) => d.id === dormitoryId)
+      let dormIndex = -1
+
+      if (dormitoryId) {
+        dormIndex = mockDormitories.findIndex((d) => d.id === dormitoryId)
+      } else if (roomNumber && bedNumber) {
+        dormIndex = mockDormitories.findIndex(
+          (d) => d.roomNumber === roomNumber && d.bedNumber === bedNumber
+        )
+      }
+
       if (regIndex === -1 || dormIndex === -1) return null
       if (mockDormitories[dormIndex].status !== 'available') return null
 
@@ -555,7 +566,16 @@ export const registrationService = {
 
     return prisma!.$transaction(async (tx) => {
       const reg = await tx.guestRegistration.findUnique({ where: { id } }) as GuestRegistration | null
-      const dorm = await tx.dormitory.findUnique({ where: { id: dormitoryId } }) as Dormitory | null
+
+      let dorm: Dormitory | null = null
+      if (dormitoryId) {
+        dorm = await tx.dormitory.findUnique({ where: { id: dormitoryId } }) as Dormitory | null
+      } else if (roomNumber && bedNumber) {
+        dorm = await tx.dormitory.findFirst({
+          where: { roomNumber, bedNumber },
+        }) as Dormitory | null
+      }
+
       if (!reg || !dorm || dorm.status !== 'available') return null
 
       if (reg.roomNumber && reg.bedNumber) {
@@ -569,7 +589,7 @@ export const registrationService = {
       }
 
       await tx.dormitory.update({
-        where: { id: dormitoryId },
+        where: { id: dorm.id },
         data: { status: 'occupied', currentOccupantId: id },
       })
 
