@@ -147,7 +147,7 @@ const handleRunCheck = async () => {
   runningCheck.value = true
   try {
     const result = await runDailyCheck()
-    message.success(`检查完成：新增 ${result.created} 条提醒，${result.expired} 人已到期，${result.expiring} 人即将到期`)
+    message.success(`检查完成：新增 ${result.created} 条提醒，${result.expired} 人已到期，${result.expiring} 人即将到期，${result.absentWarnings} 条缺勤预警`)
     loadData()
   } catch (error) {
     message.error('执行检查失败')

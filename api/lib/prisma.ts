@@ -910,6 +910,14 @@ export const attendanceService = {
         createdAt: new Date(),
       }))
       mockAttendances.push(...newRecords)
+
+      const hasAbsent = request.records.some(r => r.status === 'absent')
+      if (hasAbsent) {
+        scheduleService.checkAbsentAlerts().catch(err => {
+          console.error('Auto absent alert check failed:', err)
+        })
+      }
+
       return newRecords
     }
     const records = request.records.map((r) => ({
@@ -921,7 +929,7 @@ export const attendanceService = {
       notes: r.notes,
       recordedBy,
     }))
-    return prisma!.$transaction(
+    const result = await prisma!.$transaction(
       records.map((r) =>
         prisma!.attendance.upsert({
           where: {
@@ -936,6 +944,15 @@ export const attendanceService = {
         })
       )
     ) as Promise<Attendance[]>
+
+    const hasAbsent = request.records.some(r => r.status === 'absent')
+    if (hasAbsent) {
+      scheduleService.checkAbsentAlerts().catch(err => {
+        console.error('Auto absent alert check failed:', err)
+      })
+    }
+
+    return result
   },
 
   async getAbsentCount(days: number = 7): Promise<number> {
@@ -1352,7 +1369,7 @@ export const notificationService = {
 }
 
 export const scheduleService = {
-  async runDailyCheck(): Promise<{ created: number; expired: number; expiring: number }> {
+  async runDailyCheck(): Promise<{ created: number; expired: number; expiring: number; absentWarnings: number }> {
     console.log(`[${new Date().toISOString()}] Running daily check...`)
 
     let createdCount = 0
@@ -1548,8 +1565,10 @@ export const scheduleService = {
       }
     }
 
-    console.log(`[${new Date().toISOString()}] Daily check completed: ${createdCount} notifications created, ${expiredCount} expired, ${expiringCount} expiring`)
-    return { created: createdCount, expired: expiredCount, expiring: expiringCount }
+    const absentWarningCount = await this.checkAbsentAlerts()
+
+    console.log(`[${new Date().toISOString()}] Daily check completed: ${createdCount} notifications created, ${expiredCount} expired, ${expiringCount} expiring, ${absentWarningCount} absent warnings`)
+    return { created: createdCount, expired: expiredCount, expiring: expiringCount, absentWarnings: absentWarningCount }
   },
 
   async getExpiringRegistrations(days: number = 3): Promise<GuestRegistration[]> {
@@ -1580,6 +1599,55 @@ export const scheduleService = {
       const daysLeft = Math.ceil((expectedLeave.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
       return daysLeft > 0 && daysLeft <= days
     })
+  },
+
+  async checkAbsentAlerts(threshold: number = 3): Promise<number> {
+    console.log(`[${new Date().toISOString()}] Checking absent alerts (threshold: ${threshold})...`)
+    const alerts = await attendanceService.getAbsentAlerts(threshold)
+    let createdCount = 0
+
+    for (const alert of alerts) {
+      if (useMock || !(await testConnection())) {
+        const existing = mockNotifications.find(n =>
+          n.type === 'absent_warning' &&
+          n.relatedId === alert.monkId &&
+          !n.isRead
+        )
+        if (!existing) {
+          await notificationService.create({
+            type: 'absent_warning',
+            title: '缺勤累计提醒',
+            content: `${alert.dharmaName} 近7天已累计缺勤 ${alert.absentCount} 次，超过阈值 ${threshold} 次，请及时关注。最近一次缺勤日期：${new Date(alert.lastAbsentDate).toISOString().split('T')[0]}。`,
+            priority: 'high',
+            relatedId: alert.monkId,
+            relatedType: alert.monkType,
+          })
+          createdCount++
+        }
+      } else {
+        const existing = await (prisma as any).notification.findFirst({
+          where: {
+            type: 'absent_warning',
+            relatedId: alert.monkId,
+            isRead: false,
+          },
+        })
+        if (!existing) {
+          await notificationService.create({
+            type: 'absent_warning',
+            title: '缺勤累计提醒',
+            content: `${alert.dharmaName} 近7天已累计缺勤 ${alert.absentCount} 次，超过阈值 ${threshold} 次，请及时关注。最近一次缺勤日期：${new Date(alert.lastAbsentDate).toISOString().split('T')[0]}。`,
+            priority: 'high',
+            relatedId: alert.monkId,
+            relatedType: alert.monkType,
+          })
+          createdCount++
+        }
+      }
+    }
+
+    console.log(`[${new Date().toISOString()}] Absent alert check completed: ${createdCount} new notifications created`)
+    return createdCount
   },
 }
 

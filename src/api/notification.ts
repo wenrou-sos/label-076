@@ -46,7 +46,7 @@ export const getExpiringRegistrations = (days?: number) => {
 }
 
 export const runDailyCheck = () => {
-  return request<{ created: number; expired: number; expiring: number }>({
+  return request<{ created: number; expired: number; expiring: number; absentWarnings: number }>({
     url: '/notifications/run-daily-check',
     method: 'POST'
   })
