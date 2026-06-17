@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NLayout,
@@ -29,8 +29,8 @@ const renderIcon = (icon: any) => {
   return () => h(icon, { size: 18 })
 }
 import { useAuthStore } from '@/stores/auth'
-import { getAbsentAlerts } from '@/api/attendance'
-import type { AbsentAlert } from '../../shared/types'
+import { getUnreadCount } from '@/api/notification'
+import type { Notification } from '../../shared/types'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -38,7 +38,8 @@ const router = useRouter()
 const message = useMessage()
 
 const collapsed = ref(false)
-const absentAlerts = ref<AbsentAlert[]>([])
+const unreadCount = ref(0)
+let unreadPollingTimer: number | null = null
 
 const menuOptions: any[] = [
   {
@@ -75,6 +76,11 @@ const menuOptions: any[] = [
     label: '考勤记录',
     key: '/attendance/records',
     icon: renderIcon(FileText)
+  },
+  {
+    label: '消息中心',
+    key: '/notifications',
+    icon: renderIcon(Bell)
   }
 ]
 
@@ -108,19 +114,30 @@ const handleUserSelect = (key: string) => {
   }
 }
 
-const loadAlerts = async () => {
+const goToNotifications = () => {
+  router.push('/notifications')
+}
+
+const loadUnreadCount = async () => {
+  if (!authStore.isLoggedIn) return
   try {
-    const alerts = await getAbsentAlerts()
-    absentAlerts.value = alerts
+    unreadCount.value = await getUnreadCount()
   } catch (error) {
-    console.error('Failed to load alerts:', error)
+    console.error('Failed to load unread count:', error)
   }
 }
 
 onMounted(() => {
   authStore.initAuth()
   if (authStore.isLoggedIn) {
-    loadAlerts()
+    loadUnreadCount()
+    unreadPollingTimer = window.setInterval(loadUnreadCount, 30000)
+  }
+})
+
+onUnmounted(() => {
+  if (unreadPollingTimer) {
+    clearInterval(unreadPollingTimer)
   }
 })
 </script>
@@ -167,8 +184,12 @@ onMounted(() => {
         </div>
         
         <div class="flex items-center gap-4">
-          <NBadge :value="absentAlerts.length" :show="absentAlerts.length > 0">
-            <button class="p-2 rounded-lg hover:bg-amber-50 transition-colors">
+          <NBadge :value="unreadCount" :show="unreadCount > 0" type="error">
+            <button
+              class="p-2 rounded-lg hover:bg-amber-50 transition-colors"
+              @click="goToNotifications"
+              title="消息中心"
+            >
               <Bell class="w-5 h-5 text-amber-700" />
             </button>
           </NBadge>

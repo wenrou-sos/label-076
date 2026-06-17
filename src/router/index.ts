@@ -9,6 +9,7 @@ import ProbationList from '@/pages/ProbationList.vue'
 import ResidentDetail from '@/pages/ResidentDetail.vue'
 import Attendance from '@/pages/Attendance.vue'
 import AttendanceRecords from '@/pages/AttendanceRecords.vue'
+import Notifications from '@/pages/Notifications.vue'
 import Layout from '@/components/Layout.vue'
 
 const routes: RouteRecordRaw[] = [
@@ -74,6 +75,12 @@ const routes: RouteRecordRaw[] = [
         name: 'AttendanceRecords',
         component: AttendanceRecords,
         meta: { title: '考勤记录' }
+      },
+      {
+        path: 'notifications',
+        name: 'Notifications',
+        component: Notifications,
+        meta: { title: '消息中心' }
       }
     ]
   }

@@ -18,6 +18,9 @@ import type {
   AttendanceSessionComparison,
   MonkType,
   MonkAttendanceCalendar,
+  Notification,
+  NotificationType,
+  NotificationPriority,
 } from '../../shared/types.js'
 
 let prisma: PrismaClient | null = null
@@ -112,6 +115,67 @@ let mockDormitories: Dormitory[] = [
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
   },
+  {
+    id: 'd6',
+    roomNumber: '301',
+    bedNumber: '1',
+    floor: 3,
+    capacity: 1,
+    status: 'occupied',
+    currentOccupantId: 'g5',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  {
+    id: 'd7',
+    roomNumber: '301',
+    bedNumber: '2',
+    floor: 3,
+    capacity: 1,
+    status: 'available',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  {
+    id: 'd8',
+    roomNumber: '103',
+    bedNumber: '1',
+    floor: 1,
+    capacity: 1,
+    status: 'available',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  {
+    id: 'd9',
+    roomNumber: '103',
+    bedNumber: '2',
+    floor: 1,
+    capacity: 1,
+    status: 'available',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  {
+    id: 'd10',
+    roomNumber: '202',
+    bedNumber: '1',
+    floor: 2,
+    capacity: 1,
+    status: 'available',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  {
+    id: 'd11',
+    roomNumber: '202',
+    bedNumber: '2',
+    floor: 2,
+    capacity: 1,
+    status: 'available',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
 ]
 
 let mockRegistrations: GuestRegistration[] = [
@@ -120,39 +184,52 @@ let mockRegistrations: GuestRegistration[] = [
     dharmaName: '释行者',
     originalTemple: '少林寺',
     preceptsCertificateNo: 'PC2024001',
-    arrivalDate: new Date('2024-06-01'),
+    arrivalDate: new Date(Date.now() - 27 * 24 * 60 * 60 * 1000),
     expectedStayDays: 30,
     roomNumber: '101',
     bedNumber: '2',
     status: 'active',
     createdBy: '1',
-    createdAt: new Date('2024-06-01'),
-    updatedAt: new Date('2024-06-01'),
+    createdAt: new Date(Date.now() - 27 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 27 * 24 * 60 * 60 * 1000),
   },
   {
     id: 'g2',
     dharmaName: '释云水',
     originalTemple: '普陀山',
-    arrivalDate: new Date('2024-06-10'),
+    arrivalDate: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
     expectedStayDays: 15,
     status: 'active',
     createdBy: '1',
-    createdAt: new Date('2024-06-10'),
-    updatedAt: new Date('2024-06-10'),
+    createdAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+  },
+  {
+    id: 'g5',
+    dharmaName: '释今日',
+    originalTemple: '九华山',
+    arrivalDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+    expectedStayDays: 10,
+    roomNumber: '301',
+    bedNumber: '1',
+    status: 'active',
+    createdBy: '1',
+    createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
   },
   {
     id: 'g3',
     dharmaName: '释修行',
     originalTemple: '五台山',
     preceptsCertificateNo: 'PC2024003',
-    arrivalDate: new Date('2024-05-15'),
+    arrivalDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
     expectedStayDays: 90,
     status: 'probation',
     roomNumber: '201',
     bedNumber: '2',
     createdBy: '2',
-    createdAt: new Date('2024-05-15'),
-    updatedAt: new Date('2024-06-01'),
+    createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
   },
   {
     id: 'g4',
@@ -267,6 +344,8 @@ let mockAttendances: Attendance[] = [
     createdAt: new Date('2024-06-13'),
   },
 ]
+
+let mockNotifications: Notification[] = []
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15)
@@ -1154,6 +1233,353 @@ export const attendanceService = {
       attendanceRate,
       records: formattedRecords
     }
+  },
+}
+
+export const notificationService = {
+  async findAll(params?: PaginationParams & { isRead?: boolean; type?: string }): Promise<PaginatedResponse<Notification>> {
+    if (useMock || !(await testConnection())) {
+      let data = [...mockNotifications].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      if (params?.isRead !== undefined) {
+        data = data.filter(n => n.isRead === params.isRead)
+      }
+      if (params?.type) {
+        data = data.filter(n => n.type === params.type)
+      }
+      const total = data.length
+      const page = params?.page || 1
+      const pageSize = params?.pageSize || 20
+      const start = (page - 1) * pageSize
+      data = data.slice(start, start + pageSize)
+      return { data, total, page, pageSize }
+    }
+    const where: any = {}
+    if (params?.isRead !== undefined) where.isRead = params.isRead
+    if (params?.type) where.type = params.type
+    const [total, data] = await Promise.all([
+      (prisma as any).notification.count({ where }),
+      (prisma as any).notification.findMany({
+        where,
+        skip: params?.page ? (params.page - 1) * (params.pageSize || 20) : 0,
+        take: params?.pageSize || 20,
+        orderBy: { createdAt: 'desc' },
+      }) as Promise<Notification[]>,
+    ])
+    return {
+      data,
+      total,
+      page: params?.page || 1,
+      pageSize: params?.pageSize || 20,
+    }
+  },
+
+  async getUnreadCount(): Promise<number> {
+    if (useMock || !(await testConnection())) {
+      return mockNotifications.filter(n => !n.isRead).length
+    }
+    return (prisma as any).notification.count({ where: { isRead: false } })
+  },
+
+  async create(params: {
+    type: NotificationType
+    title: string
+    content: string
+    priority: NotificationPriority
+    relatedId?: string
+    relatedType?: string
+  }): Promise<Notification> {
+    const notification: Notification = {
+      id: generateId(),
+      ...params,
+      isRead: false,
+      createdAt: new Date(),
+    }
+    if (useMock || !(await testConnection())) {
+      mockNotifications.unshift(notification)
+      return notification
+    }
+    return (prisma as any).notification.create({
+      data: {
+        id: notification.id,
+        type: notification.type,
+        title: notification.title,
+        content: notification.content,
+        priority: notification.priority,
+        relatedId: notification.relatedId,
+        relatedType: notification.relatedType,
+        isRead: false,
+        createdAt: notification.createdAt,
+      },
+    }) as Promise<Notification>
+  },
+
+  async markAsRead(id: string): Promise<boolean> {
+    if (useMock || !(await testConnection())) {
+      const index = mockNotifications.findIndex(n => n.id === id)
+      if (index !== -1) {
+        mockNotifications[index] = {
+          ...mockNotifications[index],
+          isRead: true,
+          readAt: new Date(),
+        }
+        return true
+      }
+      return false
+    }
+    const result = await (prisma as any).notification.update({
+      where: { id },
+      data: { isRead: true, readAt: new Date() },
+    })
+    return !!result
+  },
+
+  async markAllAsRead(): Promise<number> {
+    if (useMock || !(await testConnection())) {
+      const count = mockNotifications.filter(n => !n.isRead).length
+      mockNotifications = mockNotifications.map(n => ({
+        ...n,
+        isRead: true,
+        readAt: n.isRead ? n.readAt : new Date(),
+      }))
+      return count
+    }
+    const result = await (prisma as any).notification.updateMany({
+      where: { isRead: false },
+      data: { isRead: true, readAt: new Date() },
+    })
+    return result.count
+  },
+}
+
+export const scheduleService = {
+  async runDailyCheck(): Promise<{ created: number; expired: number; expiring: number }> {
+    console.log(`[${new Date().toISOString()}] Running daily check...`)
+
+    let createdCount = 0
+    let expiredCount = 0
+    let expiringCount = 0
+
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+    if (useMock || !(await testConnection())) {
+      for (const reg of mockRegistrations) {
+        if (reg.status !== 'active') continue
+
+        const arrival = new Date(reg.arrivalDate)
+        const expectedLeave = new Date(arrival)
+        expectedLeave.setDate(expectedLeave.getDate() + reg.expectedStayDays)
+        expectedLeave.setHours(0, 0, 0, 0)
+
+        const daysLeft = Math.ceil((expectedLeave.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+        if (daysLeft <= 0) {
+          expiredCount++
+          const existingNotif = mockNotifications.find(n =>
+            n.type === 'registration_expired' && n.relatedId === reg.id
+          )
+          if (!existingNotif) {
+            const regIndex = mockRegistrations.findIndex(r => r.id === reg.id)
+            if (regIndex !== -1) {
+              mockRegistrations[regIndex] = {
+                ...mockRegistrations[regIndex],
+                status: 'checked_out',
+                actualLeaveDate: today,
+                updatedAt: new Date(),
+              }
+              if (reg.roomNumber && reg.bedNumber) {
+                const dormIndex = mockDormitories.findIndex(
+                  d => d.roomNumber === reg.roomNumber && d.bedNumber === reg.bedNumber
+                )
+                if (dormIndex !== -1) {
+                  mockDormitories[dormIndex] = {
+                    ...mockDormitories[dormIndex],
+                    status: 'available',
+                    currentOccupantId: undefined,
+                    updatedAt: new Date(),
+                  }
+                }
+              }
+              await notificationService.create({
+                type: 'registration_expired',
+                title: '挂单已到期',
+                content: `${reg.dharmaName} 挂单已到期，系统已自动标记为已离寺并释放床位 ${reg.roomNumber || '-'}-${reg.bedNumber || '-'}。`,
+                priority: 'high',
+                relatedId: reg.id,
+                relatedType: 'registration',
+              })
+              createdCount++
+            }
+          }
+        } else if (daysLeft <= 3) {
+          expiringCount++
+          const existingNotif = mockNotifications.find(n =>
+            n.type === 'registration_expiring' && n.relatedId === reg.id
+          )
+          if (!existingNotif) {
+            await notificationService.create({
+              type: 'registration_expiring',
+              title: '挂单即将到期',
+              content: `${reg.dharmaName} 还有 ${daysLeft} 天挂单到期，请及时处理。预计离寺日期：${expectedLeave.toISOString().split('T')[0]}。`,
+              priority: 'medium',
+              relatedId: reg.id,
+              relatedType: 'registration',
+            })
+            createdCount++
+          }
+        }
+      }
+
+      for (const res of mockResidents) {
+        if (res.status !== 'probation') continue
+
+        const probationStart = new Date(res.probationStartDate)
+        const probationEnd = new Date(probationStart)
+        probationEnd.setMonth(probationEnd.getMonth() + 6)
+        probationEnd.setHours(0, 0, 0, 0)
+
+        const daysLeft = Math.ceil((probationEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+        if (daysLeft > 0 && daysLeft <= 30) {
+          const existingNotif = mockNotifications.find(n =>
+            n.type === 'probation_expiring' && n.relatedId === res.id
+          )
+          if (!existingNotif) {
+            await notificationService.create({
+              type: 'probation_expiring',
+              title: '考察期即将到期',
+              content: `${res.dharmaName} 的考察期还有 ${daysLeft} 天到期，请及时安排羯磨仪式。考察期结束日期：${probationEnd.toISOString().split('T')[0]}。`,
+              priority: 'high',
+              relatedId: res.id,
+              relatedType: 'resident',
+            })
+            createdCount++
+          }
+        }
+      }
+    } else {
+      const activeRegs = await prisma!.guestRegistration.findMany({
+        where: { status: 'active' },
+      }) as GuestRegistration[]
+
+      for (const reg of activeRegs) {
+        const arrival = new Date(reg.arrivalDate)
+        const expectedLeave = new Date(arrival)
+        expectedLeave.setDate(expectedLeave.getDate() + reg.expectedStayDays)
+        expectedLeave.setHours(0, 0, 0, 0)
+
+        const daysLeft = Math.ceil((expectedLeave.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+        if (daysLeft <= 0) {
+          expiredCount++
+          const existingNotif = await (prisma as any).notification.findFirst({
+            where: { type: 'registration_expired', relatedId: reg.id },
+          })
+          if (!existingNotif) {
+            await prisma!.$transaction(async (tx) => {
+              await tx.guestRegistration.update({
+                where: { id: reg.id },
+                data: { status: 'checked_out', actualLeaveDate: today, updatedAt: new Date() },
+              })
+              if (reg.roomNumber && reg.bedNumber) {
+                await tx.dormitory.updateMany({
+                  where: { roomNumber: reg.roomNumber, bedNumber: reg.bedNumber },
+                  data: { status: 'available', currentOccupantId: null, updatedAt: new Date() },
+                })
+              }
+            })
+            await notificationService.create({
+              type: 'registration_expired',
+              title: '挂单已到期',
+              content: `${reg.dharmaName} 挂单已到期，系统已自动标记为已离寺并释放床位 ${reg.roomNumber || '-'}-${reg.bedNumber || '-'}。`,
+              priority: 'high',
+              relatedId: reg.id,
+              relatedType: 'registration',
+            })
+            createdCount++
+          }
+        } else if (daysLeft <= 3) {
+          expiringCount++
+          const existingNotif = await (prisma as any).notification.findFirst({
+            where: { type: 'registration_expiring', relatedId: reg.id },
+          })
+          if (!existingNotif) {
+            await notificationService.create({
+              type: 'registration_expiring',
+              title: '挂单即将到期',
+              content: `${reg.dharmaName} 还有 ${daysLeft} 天挂单到期，请及时处理。预计离寺日期：${expectedLeave.toISOString().split('T')[0]}。`,
+              priority: 'medium',
+              relatedId: reg.id,
+              relatedType: 'registration',
+            })
+            createdCount++
+          }
+        }
+      }
+
+      const probationResidents = await prisma!.resident.findMany({
+        where: { status: 'probation' },
+      }) as Resident[]
+
+      for (const res of probationResidents) {
+        const probationStart = new Date(res.probationStartDate)
+        const probationEnd = new Date(probationStart)
+        probationEnd.setMonth(probationEnd.getMonth() + 6)
+        probationEnd.setHours(0, 0, 0, 0)
+
+        const daysLeft = Math.ceil((probationEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+        if (daysLeft > 0 && daysLeft <= 30) {
+          const existingNotif = await (prisma as any).notification.findFirst({
+            where: { type: 'probation_expiring', relatedId: res.id },
+          })
+          if (!existingNotif) {
+            await notificationService.create({
+              type: 'probation_expiring',
+              title: '考察期即将到期',
+              content: `${res.dharmaName} 的考察期还有 ${daysLeft} 天到期，请及时安排羯磨仪式。考察期结束日期：${probationEnd.toISOString().split('T')[0]}。`,
+              priority: 'high',
+              relatedId: res.id,
+              relatedType: 'resident',
+            })
+            createdCount++
+          }
+        }
+      }
+    }
+
+    console.log(`[${new Date().toISOString()}] Daily check completed: ${createdCount} notifications created, ${expiredCount} expired, ${expiringCount} expiring`)
+    return { created: createdCount, expired: expiredCount, expiring: expiringCount }
+  },
+
+  async getExpiringRegistrations(days: number = 3): Promise<GuestRegistration[]> {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    if (useMock || !(await testConnection())) {
+      return mockRegistrations.filter(reg => {
+        if (reg.status !== 'active') return false
+        const arrival = new Date(reg.arrivalDate)
+        const expectedLeave = new Date(arrival)
+        expectedLeave.setDate(expectedLeave.getDate() + reg.expectedStayDays)
+        expectedLeave.setHours(0, 0, 0, 0)
+        const daysLeft = Math.ceil((expectedLeave.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        return daysLeft > 0 && daysLeft <= days
+      })
+    }
+
+    const allActive = await prisma!.guestRegistration.findMany({
+      where: { status: 'active' },
+    }) as GuestRegistration[]
+
+    return allActive.filter(reg => {
+      const arrival = new Date(reg.arrivalDate)
+      const expectedLeave = new Date(arrival)
+      expectedLeave.setDate(expectedLeave.getDate() + reg.expectedStayDays)
+      expectedLeave.setHours(0, 0, 0, 0)
+      const daysLeft = Math.ceil((expectedLeave.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      return daysLeft > 0 && daysLeft <= days
+    })
   },
 }
 

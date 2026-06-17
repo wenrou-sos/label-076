@@ -141,6 +141,42 @@ export interface AbsentAlert {
   lastAbsentDate: Date;
 }
 
+export type NotificationType = 'registration_expiring' | 'registration_expired' | 'absent_warning' | 'probation_expiring'
+
+export type NotificationPriority = 'low' | 'medium' | 'high'
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  content: string;
+  priority: NotificationPriority;
+  relatedId?: string;
+  relatedType?: string;
+  isRead: boolean;
+  createdAt: Date;
+  readAt?: Date;
+}
+
+export const NotificationTypeLabels: Record<NotificationType, string> = {
+  registration_expiring: '挂单到期提醒',
+  registration_expired: '挂单已到期',
+  absent_warning: '缺勤提醒',
+  probation_expiring: '考察期到期提醒'
+}
+
+export const NotificationPriorityLabels: Record<NotificationPriority, string> = {
+  low: '普通',
+  medium: '重要',
+  high: '紧急'
+}
+
+export const NotificationPriorityColors: Record<NotificationPriority, 'default' | 'warning' | 'error'> = {
+  low: 'default',
+  medium: 'warning',
+  high: 'error'
+}
+
 export interface AttendanceWeeklyTrend {
   week: string;
   absentCount: number;

@@ -7,12 +7,15 @@ import cors from 'cors'
 import path from 'path'
 import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
+import cron from 'node-cron'
 import authRoutes from './routes/auth.js'
 import dashboardRoutes from './routes/dashboard.js'
 import registrationRoutes from './routes/registrations.js'
 import dormitoryRoutes from './routes/dormitories.js'
 import residentRoutes from './routes/residents.js'
 import attendanceRoutes from './routes/attendance.js'
+import notificationRoutes from './routes/notifications.js'
+import { scheduleService } from './lib/prisma.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -31,6 +34,25 @@ app.use('/api/registrations', registrationRoutes)
 app.use('/api/dormitories', dormitoryRoutes)
 app.use('/api/residents', residentRoutes)
 app.use('/api/attendance', attendanceRoutes)
+app.use('/api/notifications', notificationRoutes)
+
+cron.schedule('0 0 8 * * *', async () => {
+  try {
+    await scheduleService.runDailyCheck()
+  } catch (error) {
+    console.error('Cron daily check failed:', error)
+  }
+}, {
+  timezone: 'Asia/Shanghai'
+})
+
+setTimeout(async () => {
+  try {
+    await scheduleService.runDailyCheck()
+  } catch (error) {
+    console.error('Initial daily check failed:', error)
+  }
+}, 3000)
 
 app.use(
   '/api/health',

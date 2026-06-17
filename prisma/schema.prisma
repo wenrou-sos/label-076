@@ -103,3 +103,21 @@ model Attendance {
   @@unique([monkId, date, session])
   @@map("attendance")
 }
+
+model Notification {
+  id          String   @id @default(uuid())
+  type        String   @db.VarChar(50)
+  title       String   @db.VarChar(200)
+  content     String   @db.Text
+  priority    String   @default("medium") @db.VarChar(20)
+  relatedId   String?  @map("related_id")
+  relatedType String?  @map("related_type") @db.VarChar(50)
+  isRead      Boolean  @default(false) @map("is_read")
+  createdAt   DateTime @default(now()) @map("created_at")
+  readAt      DateTime? @map("read_at")
+
+  @@index([isRead])
+  @@index([createdAt])
+  @@index([type])
+  @@map("notifications")
+}

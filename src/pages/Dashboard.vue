@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, shallowRef } from 'vue'
-import { NCard, NGrid, NGridItem, NStatistic, NSpace, useMessage } from 'naive-ui'
+import { useRouter } from 'vue-router'
+import { NCard, NGrid, NGridItem, NStatistic, NSpace, useMessage, NTag } from 'naive-ui'
 import {
   Users,
   UserPlus,
@@ -8,17 +9,22 @@ import {
   Bed,
   ClipboardCheck,
   AlertTriangle,
-  TrendingUp
+  TrendingUp,
+  Clock,
+  ChevronRight
 } from 'lucide-vue-next'
 import * as echarts from 'echarts'
 import { getDashboardStats } from '@/api/dashboard'
 import { getAbsentAlerts } from '@/api/attendance'
-import type { DashboardStats, AbsentAlert } from '../../shared/types'
+import { getExpiringRegistrations } from '@/api/notification'
+import type { DashboardStats, AbsentAlert, GuestRegistration } from '../../shared/types'
 import dayjs from 'dayjs'
 
+const router = useRouter()
 const message = useMessage()
 const stats = ref<DashboardStats | null>(null)
 const absentAlerts = ref<AbsentAlert[]>([])
+const expiringRegistrations = ref<GuestRegistration[]>([])
 const loading = ref(false)
 const chartRef = shallowRef<HTMLElement | null>(null)
 let chartInstance: echarts.ECharts | null = null
@@ -26,12 +32,14 @@ let chartInstance: echarts.ECharts | null = null
 const loadData = async () => {
   loading.value = true
   try {
-    const [statsData, alertsData] = await Promise.all([
+    const [statsData, alertsData, expiringData] = await Promise.all([
       getDashboardStats(),
-      getAbsentAlerts()
+      getAbsentAlerts(),
+      getExpiringRegistrations()
     ])
     stats.value = statsData
     absentAlerts.value = alertsData
+    expiringRegistrations.value = expiringData
     updateChart()
   } catch (error) {
     message.error('加载数据失败')
@@ -121,6 +129,19 @@ const handleResize = () => {
   chartInstance?.resize()
 }
 
+const getExpectedLeaveDate = (reg: GuestRegistration) => {
+  return dayjs(reg.arrivalDate).add(reg.expectedStayDays, 'day').format('YYYY-MM-DD')
+}
+
+const getDaysLeft = (reg: GuestRegistration) => {
+  const expected = dayjs(reg.arrivalDate).add(reg.expectedStayDays, 'day')
+  return expected.diff(dayjs(), 'day') + 1
+}
+
+const goToRegistration = () => {
+  router.push('/registration')
+}
+
 onMounted(() => {
   loadData()
   window.addEventListener('resize', handleResize)
@@ -134,6 +155,35 @@ onUnmounted(() => {
 
 <template>
   <div>
+    <div
+      v-if="expiringRegistrations.length > 0"
+      class="mb-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl cursor-pointer hover:shadow-md transition-all"
+      @click="goToRegistration"
+    >
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+            <Clock class="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <div class="font-semibold text-amber-800">
+              有 {{ expiringRegistrations.length }} 位挂单僧人即将到期
+            </div>
+            <div class="text-sm text-amber-600">
+              <span v-for="(reg, idx) in expiringRegistrations.slice(0, 3)" :key="reg.id">
+                {{ reg.dharmaName }}（还剩 {{ getDaysLeft(reg) }} 天）<span v-if="idx < Math.min(expiringRegistrations.length, 3) - 1">、</span>
+              </span>
+              <span v-if="expiringRegistrations.length > 3">等{{ expiringRegistrations.length }}人</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 text-amber-600">
+          <span class="text-sm">查看详情</span>
+          <ChevronRight class="w-4 h-4" />
+        </div>
+      </div>
+    </div>
+
     <NGrid :cols="4" :x-gap="20" :y-gap="20" class="mb-6">
       <NGridItem>
         <NCard class="stat-card border-l-green-500">
